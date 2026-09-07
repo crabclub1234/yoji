@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#101b33">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>ことばマス</title>
 <style>
   :root{
@@ -39,8 +42,13 @@
     background:rgba(255,255,255,.04);color:inherit;font:inherit;
   }
   .deck-name{font-family:var(--mincho);font-size:26px;letter-spacing:.14em;color:var(--paper)}
-  .deck-sub{margin-top:8px;font-size:13px;color:#9fb2d0;letter-spacing:.04em}
-  .deck-sub .weak{color:var(--kin)}
+  .deck-sub{margin-top:10px;font-size:12.5px;color:#9fb2d0;letter-spacing:.02em}
+  .lv-line{display:flex;align-items:baseline;gap:9px;margin-top:5px;font-variant-numeric:tabular-nums}
+  .lv-line .lv{color:var(--kin);min-width:3.4em}
+  .lv-line .st-ok{color:#dfe7f3}
+  .lv-line .st-ng{color:#e08a76}
+  .lv-line .st-new{color:#7d92b4}
+  .deck-cont{margin-top:8px;font-size:12px;color:var(--kin)}
   .lead{padding:0 16px;font-size:13px;color:#8299bb;text-align:center;margin:0 0 6px}
 
   /* ---- 出題 ---- */
@@ -141,13 +149,13 @@
   </header>
 
   <div class="row" id="levels" role="group" aria-label="レベル">
-    <button class="pill" id="lv-basic" aria-pressed="true">きほん</button>
-    <button class="pill" id="lv-exam" aria-pressed="false">じゅけん</button>
-    <button class="pill" id="lv-all" aria-pressed="false">ぜんぶ</button>
+    <button class="pill" id="lv-basic" aria-pressed="true">基本</button>
+    <button class="pill" id="lv-exam" aria-pressed="false">受験</button>
+    <button class="pill" id="lv-all" aria-pressed="false">全部</button>
   </div>
   <div class="row mode" role="group" aria-label="出題のしかた">
-    <button class="pill" id="md-all" aria-pressed="true">ぜんぶ出す</button>
-    <button class="pill" id="md-weak" aria-pressed="false">にがてだけ（0）</button>
+    <button class="pill" id="md-all" aria-pressed="true">全部出す</button>
+    <button class="pill" id="md-weak" aria-pressed="false">まだの語だけ（0）</button>
   </div>
 
   <main>
@@ -1201,6 +1209,19 @@ const DECKS = {
   koto:  {name:'ことわざ', kind:'blank', basic:KOTO_BASIC,  exam:KOTO_EXAM,  hint:'つづきは？'}
 };
 
+const VERSION = '2026-09-07-1';
+async function checkUpdate(){
+  try{
+    const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
+    const txt = await res.text();
+    const m = txt.match(/const VERSION = '([^']+)'/);
+    if(m && m[1] !== VERSION && !sessionStorage.getItem('upd')){
+      sessionStorage.setItem('upd','1');
+      location.replace(location.pathname + '?v=' + m[1]);
+    }
+  }catch(e){ /* オフラインなら何もしない */ }
+}
+
 const KEY = 'kokugo-masu-v1';
 const OLD_KEY = 'yojijukugo-masu-v1';
 const GRADUATE = 2;
@@ -1227,8 +1248,18 @@ function save(){
   catch(e){ storable = false; renderNote(); }
 }
 const rec = () => store[deckId] || (store[deckId] = {});
-const isWeak = (id,w) => store[id] && store[id][w] && store[id][w].s < GRADUATE;
-const weakCount = (id, list) => list.filter(e => isWeak(id, e[0])).length;
+// 一度も間違えていなければ1回で「できた」、間違えた語は連続GRADUATE回で「できた」
+const isDone = x => x.m === 0 ? x.s >= 1 : x.s >= GRADUATE;
+const isWeak = (id,w) => {
+  const x = store[id] && store[id][w];
+  return !!x && !isDone(x);
+};
+function stats(id, list){
+  const r = store[id] || {};
+  let ne=0, ok=0, ng=0;
+  list.forEach(e => { const x = r[e[0]]; if(!x) ne++; else if(isDone(x)) ok++; else ng++; });
+  return {ne, ok, ng};
+}
 
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
@@ -1238,48 +1269,35 @@ const allOf = d => d.basic.concat(d.exam);
 
 /* ---- トップ ---- */
 function renderHome(){
-  let total = 0, weak = 0;
+  let totalNew = 0, totalNg = 0;
   for(const id in DECKS){
-    const d = DECKS[id], list = allOf(d), w = weakCount(id, list);
-    total += list.length; weak += w;
+    const d = DECKS[id];
     const btn = $('deck-' + id);
     btn.innerHTML = '';
     const n = document.createElement('div'); n.className='deck-name'; n.textContent = d.name;
-    const s = document.createElement('div'); s.className='deck-sub';
-    s.textContent = list.length + '語';
-    if(w){ const b=document.createElement('span'); b.className='weak'; b.textContent='　にがて '+w+'語'; s.appendChild(b); }
+    const wrap = document.createElement('div'); wrap.className='deck-sub';
+    [['基本', d.basic], ['受験', d.exam]].forEach(([label, list])=>{
+      if(!list.length) return;
+      const s = stats(id, list);
+      totalNew += s.ne; totalNg += s.ng;
+      const line = document.createElement('div'); line.className='lv-line';
+      const a = document.createElement('span'); a.className='lv'; a.textContent = label + ' ' + list.length;
+      const b = document.createElement('span'); b.className='st-new'; b.textContent = '未習 ' + s.ne;
+      const c = document.createElement('span'); c.className='st-ok';  c.textContent = 'できた ' + s.ok;
+      const e = document.createElement('span'); e.className='st-ng';  e.textContent = 'まだ ' + s.ng;
+      line.append(a,b,c,e);
+      wrap.appendChild(line);
+    });
+    btn.append(n, wrap);
     const ses = (store.sessions || {})[id];
-    if(ses && ses.cur){ const c=document.createElement('span'); c.textContent='　つづき のこり'+((ses.q||[]).length+1)+'語'; s.appendChild(c); }
-    btn.append(n, s);
+    if(ses && ses.cur){
+      const lv = ses.level==='exam' ? '受験' : ses.level==='all' ? '全部' : '基本';
+      const c = document.createElement('div'); c.className='deck-cont';
+      c.textContent = 'つづき（' + lv + '・のこり' + ((ses.q||[]).length + 1) + '語）';
+      btn.appendChild(c);
+    }
   }
-  $('home-count').textContent = '全' + total + '語' + (weak ? '　にがて' + weak : '');
-}
-function saveSession(){
-  if(!current) return;
-  store.sessions = store.sessions || {};
-  store.sessions[deckId] = {level, mode, done, cur: current[0], q: queue.map(e => e[0])};
-  save();
-}
-function restoreSession(s){
-  level = s.level; mode = s.mode; history = [];
-  syncLevelPills(level);
-  pool = basePool();
-  const map = new Map(allOf(DECKS[deckId]).map(e => [e[0], e]));
-  queue = (s.q || []).map(w => map.get(w)).filter(Boolean);
-  done = s.done || 0;
-  const item = map.get(s.cur);
-  syncMode(); updateUndo();
-  if(item && queue.length >= 0){
-    renderCard(item, shuffle([0,1,2,3]).slice(0,2));
-    $('grades').hidden = true; $('waiting').hidden = false;
-    const note=$('note'); note.innerHTML='';
-    const sp=document.createElement('span'); sp.textContent='つづきから始めます。　';
-    const re=document.createElement('button'); re.className='reset'; re.textContent='はじめから';
-    re.onclick = () => setLevel(level);
-    note.append(sp, re);
-  }else{
-    nextWord();
-  }
+  $('home-count').textContent = '未習 ' + totalNew + '　まだ ' + totalNg;
 }
 function openDeck(id){
   deckId = id; mode = 'all'; history = [];
@@ -1305,9 +1323,9 @@ function buildQueue(){
   let base;
   if(mode==='weak'){
     base = pool.filter(e => isWeak(deckId, e[0]));
-    if(base.length===0){ mode='all'; $('note').textContent='にがてはまだありません。ぜんぶ出します。'; base = pool.slice(); }
+    if(base.length===0){ mode='all'; $('note').textContent='「まだ」の語はありません。全部出します。'; base = pool.slice(); }
   }else{
-    base = pool.concat(pool.filter(e => isWeak(deckId, e[0])));   // にがては出やすく
+    base = pool.concat(pool.filter(e => isWeak(deckId, e[0])));   // 「まだ」の語は出やすく
   }
   queue = shuffle(base);
   done = 0;
@@ -1370,11 +1388,9 @@ function grade(ok){
   const w = current[0], r = rec();
   history.push({item:current, idx:shownIdx, prev: r[w] ? {...r[w]} : null});
   if(history.length > 30) history.shift();
-  if(ok){
-    if(r[w]){ r[w].s++; if(r[w].s >= GRADUATE) delete r[w]; }
-  }else{
-    const e = r[w] || {s:0,m:0}; e.s = 0; e.m++; r[w] = e;
-  }
+  const e = r[w] || {s:0, m:0};
+  if(ok){ e.s++; } else { e.s = 0; e.m++; }
+  r[w] = e;
   save(); syncMode(); nextWord(); saveSession(); updateUndo();
 }
 function undo(){
@@ -1392,7 +1408,7 @@ function syncMode(){
   $('md-all').setAttribute('aria-pressed', mode==='all');
   $('md-weak').setAttribute('aria-pressed', mode==='weak');
   const n = pool.filter(e => isWeak(deckId, e[0])).length;
-  $('md-weak').textContent = 'にがてだけ（' + n + '）';
+  $('md-weak').textContent = 'まだの語だけ（' + n + '）';
   $('md-weak').disabled = (n===0 && mode!=='weak');
   renderNote();
 }
@@ -1400,11 +1416,11 @@ function renderNote(){
   const note = $('note'); note.innerHTML = '';
   if(!storable){ note.textContent='この画面では記録を保存できません。ダウンロードしてブラウザで開いてください。'; return; }
   const n = pool.filter(e => isWeak(deckId, e[0])).length;
-  const txt = document.createElement('span'); txt.textContent = 'にがて ' + n + '語　';
+  const txt = document.createElement('span'); txt.textContent = 'まだ ' + n + '語　';
   const btn = document.createElement('button');
   btn.className='reset'; btn.textContent='このジャンルの記録をけす';
   btn.onclick = () => {
-    if(!confirm(DECKS[deckId].name + 'のにがて記録を消します。よろしいですか？')) return;
+    if(!confirm(DECKS[deckId].name + 'の学習記録を消します。よろしいですか？')) return;
     store[deckId] = {}; save(); mode='all'; history=[]; buildQueue(); syncMode(); nextWord(); updateUndo();
   };
   note.append(txt, btn);
@@ -1441,6 +1457,7 @@ $('deck-koto').addEventListener('click', ()=>openDeck('koto'));
 
 load();
 renderHome();
+checkUpdate();
 </script>
 </body>
 </html>
