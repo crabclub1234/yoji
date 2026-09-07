@@ -105,6 +105,8 @@
   .hint{margin:16px 0 0;font-size:13px;color:#8299bb;letter-spacing:.08em}
   .yomi,.imi{opacity:0;transition:opacity .25s ease}
   .reveal .yomi,.reveal .imi{opacity:1}
+  .card[data-dir="fill"] .imi{opacity:1}      /* 穴うめ：意味はヒントとして先に出す */
+  .card[data-dir="meaning"] .yomi{opacity:1}  /* 意味当て：読み仮名を先に出す */
   .reveal .hint{visibility:hidden}
 
   footer{padding:10px 16px 16px}
@@ -152,6 +154,10 @@
     <button class="pill" id="lv-basic" aria-pressed="true">基本</button>
     <button class="pill" id="lv-exam" aria-pressed="false">受験</button>
     <button class="pill" id="lv-all" aria-pressed="false">全部</button>
+  </div>
+  <div class="row mode" role="group" aria-label="出題の向き">
+    <button class="pill" id="dir-fill" aria-pressed="true">穴うめ</button>
+    <button class="pill" id="dir-meaning" aria-pressed="false">意味当て</button>
   </div>
   <div class="row mode" role="group" aria-label="出題のしかた">
     <button class="pill" id="md-all" aria-pressed="true">全部出す</button>
@@ -1209,7 +1215,7 @@ const DECKS = {
   koto:  {name:'ことわざ', kind:'blank', basic:KOTO_BASIC,  exam:KOTO_EXAM,  hint:'つづきは？'}
 };
 
-const VERSION = '2026-09-07-2';
+const VERSION = '2026-09-07-3';
 async function checkUpdate(){
   try{
     const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
@@ -1227,7 +1233,7 @@ const OLD_KEY = 'yojijukugo-masu-v1';
 const GRADUATE = 2;
 
 let store = {yoji:{}, kanyo:{}, koto:{}}, storable = true;
-let deckId = 'yoji', level = 'basic', mode = 'all';
+let deckId = 'yoji', level = 'basic', mode = 'all', dir = 'fill';
 let pool = [], queue = [], current = null, shownIdx = [], done = 0, revealed = false;
 let history = [];
 
@@ -1302,12 +1308,12 @@ function renderHome(){
 function saveSession(){
   if(!current) return;
   store.sessions = store.sessions || {};
-  store.sessions[deckId] = {level, mode, done, cur: current[0], q: queue.map(e => e[0])};
+  store.sessions[deckId] = {level, mode, dir, done, cur: current[0], q: queue.map(e => e[0])};
   save();
 }
 function restoreSession(s){
-  level = s.level || 'basic'; mode = s.mode || 'all'; history = [];
-  syncLevelPills(level);
+  level = s.level || 'basic'; mode = s.mode || 'all'; dir = s.dir || 'fill'; history = [];
+  syncLevelPills(level); syncDirPills();
   pool = basePool();
   const map = new Map(allOf(DECKS[deckId]).map(e => [e[0], e]));
   queue = (s.q || []).map(w => map.get(w)).filter(Boolean);
@@ -1326,10 +1332,20 @@ function restoreSession(s){
     nextWord();
   }
 }
+function syncDirPills(){
+  $('dir-fill').setAttribute('aria-pressed', dir==='fill');
+  $('dir-meaning').setAttribute('aria-pressed', dir==='meaning');
+  $('hint').textContent = dir==='meaning' ? 'タップして　意味を見る' : DECKS[deckId].hint;
+}
+function setDir(name){
+  dir = name; history = [];
+  syncDirPills();
+  buildQueue(); syncMode(); nextWord(); updateUndo();
+}
 function openDeck(id){
-  deckId = id; mode = 'all'; history = [];
+  deckId = id; mode = 'all'; dir = 'fill'; history = [];
   $('deck-title').textContent = DECKS[id].name;
-  $('hint').textContent = DECKS[id].hint;
+  syncDirPills();
   $('levels').hidden = (DECKS[id].exam.length === 0);
   $('home').hidden = true; $('quiz').hidden = false;
   const s = (store.sessions || {})[id];
@@ -1365,15 +1381,17 @@ function renderCard(item, idx){
   $('phrase').hidden = (kind !== 'blank');
   if(kind === 'masu') renderMasu(item, idx); else renderPhrase(item);
   $('yomi').textContent = kind==='masu' ? item[1] : (item[3] || '');
-  $('imi').textContent  = kind==='masu' ? item[2] : item[2];
-  $('card').classList.remove('reveal');
+  $('imi').textContent  = item[2];
+  const card = $('card');
+  card.dataset.dir = dir;
+  card.classList.remove('reveal');
   revealed = false;
 }
 function renderMasu(item, idx){
   const masu = $('masu'); masu.innerHTML = '';
   [...item[0]].forEach((ch,i)=>{
     const box = document.createElement('div'), sp = document.createElement('span');
-    if(idx.includes(i)){ box.className='box filled'; sp.textContent=ch; }
+    if(dir === 'meaning' || idx.includes(i)){ box.className='box filled'; sp.textContent=ch; }
     else { box.className='box hidden'; sp.textContent=ch; sp.style.visibility='hidden'; }
     box.appendChild(sp); masu.appendChild(box);
   });
@@ -1385,7 +1403,7 @@ function renderPhrase(item){
   el.style.fontSize = text.length <= 8 ? '30px' : text.length <= 13 ? '25px' : '21px';
   [...text].forEach((ch,i)=>{
     const s = document.createElement('span');
-    if(i >= start && i < end){
+    if(dir !== 'meaning' && i >= start && i < end){
       s.className = 'ch blank';
       const inner = document.createElement('span');
       inner.textContent = ch; inner.style.visibility = 'hidden';
@@ -1476,6 +1494,8 @@ $('back').addEventListener('click', ()=>goHome(true));
 $('lv-basic').addEventListener('click', ()=>setLevel('basic'));
 $('lv-exam').addEventListener('click', ()=>setLevel('exam'));
 $('lv-all').addEventListener('click', ()=>setLevel('all'));
+$('dir-fill').addEventListener('click', ()=>setDir('fill'));
+$('dir-meaning').addEventListener('click', ()=>setDir('meaning'));
 $('md-all').addEventListener('click', ()=>setMode('all'));
 $('md-weak').addEventListener('click', ()=>setMode('weak'));
 $('deck-yoji').addEventListener('click', ()=>openDeck('yoji'));
