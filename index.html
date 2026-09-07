@@ -1209,7 +1209,7 @@ const DECKS = {
   koto:  {name:'ことわざ', kind:'blank', basic:KOTO_BASIC,  exam:KOTO_EXAM,  hint:'つづきは？'}
 };
 
-const VERSION = '2026-09-07-1';
+const VERSION = '2026-09-07-2';
 async function checkUpdate(){
   try{
     const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
@@ -1298,6 +1298,33 @@ function renderHome(){
     }
   }
   $('home-count').textContent = '未習 ' + totalNew + '　まだ ' + totalNg;
+}
+function saveSession(){
+  if(!current) return;
+  store.sessions = store.sessions || {};
+  store.sessions[deckId] = {level, mode, done, cur: current[0], q: queue.map(e => e[0])};
+  save();
+}
+function restoreSession(s){
+  level = s.level || 'basic'; mode = s.mode || 'all'; history = [];
+  syncLevelPills(level);
+  pool = basePool();
+  const map = new Map(allOf(DECKS[deckId]).map(e => [e[0], e]));
+  queue = (s.q || []).map(w => map.get(w)).filter(Boolean);
+  done = s.done || 0;
+  const item = map.get(s.cur);
+  syncMode(); updateUndo();
+  if(item){
+    renderCard(item, shuffle([0,1,2,3]).slice(0,2));
+    $('grades').hidden = true; $('waiting').hidden = false;
+    const note = $('note'); note.innerHTML = '';
+    const sp = document.createElement('span'); sp.textContent = 'つづきから始めます。　';
+    const re = document.createElement('button'); re.className = 'reset'; re.textContent = 'はじめから';
+    re.onclick = () => setLevel(level);
+    note.append(sp, re);
+  }else{
+    nextWord();
+  }
 }
 function openDeck(id){
   deckId = id; mode = 'all'; history = [];
