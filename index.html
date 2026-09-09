@@ -102,11 +102,24 @@
 
   .yomi{margin:16px 0 0;min-height:20px;font-size:15px;letter-spacing:.12em;color:var(--kin)}
   .imi{margin:10px auto 0;max-width:34em;min-height:3.2em;font-size:15.5px;line-height:1.75;color:#e7edf7}
+  .imi .glyph{
+    display:inline-block;font-family:var(--gothic);font-size:34px;line-height:1;
+    color:var(--shu);background:var(--paper);border-radius:4px;
+    padding:6px 10px;margin-right:12px;vertical-align:middle;
+  }
+  .phrase .glyph-inline{
+    font-family:var(--gothic);color:var(--shu);margin-right:.35em;
+  }
   .hint{margin:16px 0 0;font-size:13px;color:#8299bb;letter-spacing:.08em}
   .yomi,.imi{opacity:0;transition:opacity .25s ease}
+  .card.swap .yomi,.card.swap .imi{transition:none}
+  .card.swap .box.hidden span,.card.swap .ch.blank span{animation:none}
   .reveal .yomi,.reveal .imi{opacity:1}
   .card[data-dir="fill"] .imi{opacity:1}      /* 穴うめ：意味はヒントとして先に出す */
   .card[data-dir="meaning"] .yomi{opacity:1}  /* 意味当て：読み仮名を先に出す */
+  .card[data-kind="bushu"] .yomi{opacity:1}
+  .card[data-kind="bushu"] .imi{opacity:0}
+  .card[data-kind="bushu"].reveal .imi{opacity:1}
   .reveal .hint{visibility:hidden}
 
   footer{padding:10px 16px 16px}
@@ -139,6 +152,7 @@
     <button class="deck" id="deck-yoji"></button>
     <button class="deck" id="deck-kanyo"></button>
     <button class="deck" id="deck-koto"></button>
+    <button class="deck" id="deck-bushu"></button>
   </main>
 </section>
 
@@ -1208,14 +1222,144 @@ const KOTO_EXAM = [
 ["割れ鍋に綴じ蓋", "綴じ蓋", "どんな人にも、似合いの相手があるということ。", "われなべにとじふた"]
 ];
 
+const BUSHU_BASIC = [
+["へん:あしへん", "路・距・跡", "あしへん", "へん", "", "足"],
+["へん:いとへん", "絵・細・紙", "いとへん", "へん", "", "糸"],
+["へん:おんなへん", "姉・妹・始", "おんなへん", "へん", "", "女"],
+["へん:かいへん", "貯・財・購", "かいへん", "へん", "", "貝"],
+["へん:かねへん", "銀・鉄・鏡", "かねへん", "へん", "", "金"],
+["へん:かばねへん", "死・残・殊", "かばねへん", "へん", "", "歹"],
+["へん:きへん", "校・村・林", "きへん", "へん", "", "木"],
+["へん:ぎょうにんべん", "後・待・役", "ぎょうにんべん", "へん", "", "彳"],
+["へん:くちへん", "味・唱・吸", "くちへん", "へん", "", "口"],
+["へん:くるまへん", "軽・転・輪", "くるまへん", "へん", "", "車"],
+["へん:けものへん", "独・犯・猿", "けものへん", "へん", "", "犭"],
+["へん:こざとへん", "院・階・陽", "こざとへん", "へん", "", "阝"],
+["へん:ころもへん", "複・補・褐", "ころもへん", "へん", "", "衤"],
+["へん:ごんべん", "記・計・語", "ごんべん", "へん", "", "言"],
+["へん:さんずい", "海・活・汽", "さんずい", "へん", "", "氵"],
+["へん:しめすへん", "社・神・福", "しめすへん", "へん", "", "礻"],
+["へん:てへん", "指・持・拾", "てへん", "へん", "", "扌"],
+["へん:とりへん", "配・酸・酵", "とりへん", "へん", "", "酉"],
+["へん:にくづき", "腸・脈・肥", "にくづき", "へん", "", "月"],
+["へん:にんべん", "休・何・作", "にんべん", "へん", "", "亻"],
+["へん:のぎへん", "科・秋・秒", "のぎへん", "へん", "", "禾"],
+["へん:りっしんべん", "慣・情・性", "りっしんべん", "へん", "", "忄"],
+["つくり:あくび", "歌・欧・歓", "あくび", "つくり", "", "欠"],
+["つくり:おおがい", "顔・頭・題", "おおがい", "つくり", "", "頁"],
+["つくり:おおざと", "都・部・郡", "おおざと", "つくり", "", "阝"],
+["つくり:さんづくり", "形・影・彩", "さんづくり", "つくり", "", "彡"],
+["つくり:ちから", "助・勝・動", "ちから", "つくり", "", "力"],
+["つくり:つき", "朝・期・朗", "つき", "つくり", "", "月"],
+["つくり:とり", "鳴・鶏・鶴", "とり", "つくり", "", "鳥"],
+["つくり:のぶん", "教・数・整", "のぶん", "つくり", "", "攵"],
+["つくり:ふるとり", "雑・難・雅", "ふるとり", "つくり", "", "隹"],
+["つくり:また", "取・収・叔", "また", "つくり", "", "又"],
+["つくり:りっとう", "前・列・刷", "りっとう", "つくり", "", "刂"],
+["つくり:るまた", "殺・段・殴", "るまた", "つくり", "", "殳"],
+["かんむり:あなかんむり", "空・究・窓", "あなかんむり", "かんむり", "", "穴"],
+["かんむり:あみがしら", "置・罪・署", "あみがしら", "かんむり", "", "罒"],
+["かんむり:あめかんむり", "雲・雪・電", "あめかんむり", "かんむり", "", "雨"],
+["かんむり:うかんむり", "家・室・安", "うかんむり", "かんむり", "", "宀"],
+["かんむり:おいかんむり", "考・者・老", "おいかんむり", "かんむり", "", "耂"],
+["かんむり:おおいかんむり", "要・覇・覆", "おおいかんむり", "かんむり", "", "覀"],
+["かんむり:くさかんむり", "花・草・茶", "くさかんむり", "かんむり", "", "艹"],
+["かんむり:たけかんむり", "算・答・第", "たけかんむり", "かんむり", "", "竹"],
+["かんむり:なべぶた", "京・交・亡", "なべぶた", "かんむり", "", "亠"],
+["かんむり:はつがしら", "登・発", "はつがしら", "かんむり", "", "癶"],
+["かんむり:ひとやね", "会・今・倉", "ひとやね", "かんむり", "", "人"],
+["かんむり:わかんむり", "写・冠・冗", "わかんむり", "かんむり", "", "冖"],
+["あし:こころ", "思・悪・慕", "こころ（したごころ）", "あし", "", "心"],
+["あし:かい", "買・負・貨", "かい", "あし", "", "貝"],
+["あし:ころも", "製・装・襲", "ころも", "あし", "", "衣"],
+["あし:さら", "益・盛・盟", "さら", "あし", "", "皿"],
+["あし:したみず", "泰", "したみず", "あし", "", "水"],
+["あし:とり", "鷲・鷺・鷹", "とり", "あし", "", "鳥"],
+["あし:はち", "六・具・共", "はち", "あし", "", "八"],
+["あし:ひとあし", "先・兄・元", "ひとあし（にんにょう）", "あし", "", "儿"],
+["あし:れんが", "点・照・然", "れんが（れっか）", "あし", "", "灬"],
+["たれ:かばね", "屋・局・居", "かばね", "たれ", "", "尸"],
+["たれ:がんだれ", "原・厚・厄", "がんだれ", "たれ", "", "厂"],
+["たれ:とだれ", "扇・扉・房", "とだれ", "たれ", "", "戸"],
+["たれ:まだれ", "広・店・庫", "まだれ", "たれ", "", "广"],
+["たれ:やまいだれ", "病・痛・疫", "やまいだれ", "たれ", "", "疒"],
+["にょう:えんにょう", "建・延・廷", "えんにょう", "にょう", "", "廴"],
+["にょう:きにょう", "魅・魁", "きにょう", "にょう", "", "鬼"],
+["にょう:しんにょう", "遠・近・週", "しんにょう", "にょう", "", "⻌"],
+["にょう:そうにょう", "起・越・趣", "そうにょう", "にょう", "", "走"],
+["にょう:ばくにょう", "麺", "ばくにょう", "にょう", "", "麦"],
+["かまえ:きがまえ", "気・氣", "きがまえ", "かまえ", "", "气"],
+["かまえ:ぎょうがまえ", "街・衛・術", "ぎょうがまえ", "かまえ", "", "行"],
+["かまえ:くにがまえ", "国・園・回", "くにがまえ", "かまえ", "", "囗"],
+["かまえ:けいがまえ", "円・再・冊", "けいがまえ", "かまえ", "", "冂"],
+["かまえ:しきがまえ", "式・弐", "しきがまえ", "かまえ", "", "弋"],
+["かまえ:つつみがまえ", "包・勾・匂", "つつみがまえ", "かまえ", "", "勹"],
+["かまえ:はこがまえ", "医・匡・区", "はこがまえ（かくしがまえ）", "かまえ", "", "匚"],
+["かまえ:ほこがまえ", "成・我・戒", "ほこがまえ", "かまえ", "", "戈"],
+["かまえ:もんがまえ", "間・開・関", "もんがまえ", "かまえ", "", "門"]
+];
+
+const BUSHU_EXAM = [
+["問", "問", "口（くち）", "まちがえやすい", "「門（もんがまえ）」ではない", "口"],
+["聞", "聞", "耳（みみ）", "まちがえやすい", "「門（もんがまえ）」ではない", "耳"],
+["相", "相", "目（め）", "まちがえやすい", "「木（きへん）」ではない", "目"],
+["空", "空", "穴（あなかんむり）", "まちがえやすい", "「うかんむり」ではない", "穴"],
+["六", "六", "八（はち）", "まちがえやすい", "「なべぶた」ではない", "八"],
+["行", "行", "行（ぎょうがまえ）", "まちがえやすい", "「ぎょうにんべん」ではない", "行"],
+["合", "合", "口（くち）", "まちがえやすい", "「人（ひとがしら）」ではない", "口"],
+["鳴", "鳴", "鳥（とり）", "まちがえやすい", "「口（くちへん）」ではない", "鳥"],
+["夜", "夜", "夕（ゆうべ）", "まちがえやすい", "「なべぶた」ではない", "夕"],
+["具", "具", "八（はち）", "まちがえやすい", "「貝（かい）」ではない", "八"],
+["次", "次", "欠（あくび）", "まちがえやすい", "「にすい」ではない", "欠"],
+["酒", "酒", "酉（とりへん）", "まちがえやすい", "「さんずい」ではない", "酉"],
+["勝", "勝", "力（ちから）", "まちがえやすい", "「月（つきへん）」ではない", "力"],
+["想", "想", "心（こころ）", "まちがえやすい", "「目（め）」ではない", "心"],
+["畑", "畑", "田（た）", "まちがえやすい", "「火（ひへん）」ではない", "田"],
+["和", "和", "口（くち）", "まちがえやすい", "「禾（のぎへん）」ではない", "口"],
+["案", "案", "木（き）", "まちがえやすい", "「うかんむり」ではない", "木"],
+["街", "街", "行（ぎょうがまえ）", "まちがえやすい", "「ぎょうにんべん」ではない", "行"],
+["器", "器", "口（くち）", "まちがえやすい", "「大（だい）」ではない", "口"],
+["初", "初", "刀（かたな）", "まちがえやすい", "「しめすへん」ではない", "刀"],
+["卒", "卒", "十（じゅう）", "まちがえやすい", "「なべぶた」ではない", "十"],
+["敗", "敗", "のぶん", "まちがえやすい", "「貝（かいへん）」ではない", "攵"],
+["望", "望", "月（つき）", "まちがえやすい", "「王（おう）」ではない", "月"],
+["牧", "牧", "牛（うしへん）", "まちがえやすい", "「のぶん」ではない", "牛"],
+["要", "要", "おおいかんむり", "まちがえやすい", "「女（おんな）」ではない", "覀"],
+["料", "料", "斗（と・とます）", "まちがえやすい", "「米（こめへん）」ではない", "斗"],
+["圧", "圧", "土（つち）", "まちがえやすい", "「がんだれ」ではない", "土"],
+["応", "応", "心（こころ）", "まちがえやすい", "「まだれ」ではない", "心"],
+["現", "現", "王（おうへん）", "まちがえやすい", "「見（みる）」ではない", "王"],
+["準", "準", "さんずい", "まちがえやすい", "「ふるとり」ではない", "氵"],
+["率", "率", "玄（げん）", "まちがえやすい", "「なべぶた」ではない", "玄"],
+["導", "導", "寸（すん）", "まちがえやすい", "「しんにょう」ではない", "寸"],
+["武", "武", "止（とめる）", "まちがえやすい", "「しきがまえ」ではない", "止"],
+["務", "務", "力（ちから）", "まちがえやすい", "「のぶん」ではない", "力"],
+["夢", "夢", "夕（ゆう）", "まちがえやすい", "「くさかんむり」ではない", "夕"],
+["歴", "歴", "止（とめる）", "まちがえやすい", "「がんだれ」ではない", "止"],
+["灰", "灰", "火（ひ）", "まちがえやすい", "「がんだれ」ではない", "火"],
+["憲", "憲", "心（こころ）", "まちがえやすい", "「うかんむり」ではない", "心"],
+["厳", "厳", "ツ（つ）", "まちがえやすい", "「のぶん」ではない", "ツ"],
+["穀", "穀", "禾（のぎへん）", "まちがえやすい", "「殳（るまた）」ではない", "禾"],
+["蒸", "蒸", "くさかんむり", "まちがえやすい", "「れんが」ではない", "艹"],
+["聖", "聖", "耳（みみ）", "まちがえやすい", "「王（おう）」ではない", "耳"],
+["染", "染", "木（き）", "まちがえやすい", "「さんずい」ではない", "木"],
+["裁", "裁", "衣（ころも）", "まちがえやすい", "「ほこづくり」ではない", "衣"],
+["奮", "奮", "大（だい）", "まちがえやすい", "「田（た）」ではない", "大"],
+["幼", "幼", "いとがしら", "まちがえやすい", "「力（ちから）」ではない", "幺"],
+["裏", "裏", "衣（ころも）", "まちがえやすい", "「なべぶた」ではない", "衣"]
+];
+
 
 const DECKS = {
   yoji:  {name:'四字熟語', kind:'masu',  basic:BASIC,       exam:EXAM, hint:'タップして　こたえを見る'},
   kanyo: {name:'慣用句',   kind:'blank', basic:KANYO_BASIC, exam:KANYO_EXAM, hint:'□に入る言葉は？'},
-  koto:  {name:'ことわざ', kind:'blank', basic:KOTO_BASIC,  exam:KOTO_EXAM,  hint:'つづきは？'}
+  koto:  {name:'ことわざ', kind:'blank', basic:KOTO_BASIC,  exam:KOTO_EXAM,  hint:'つづきは？'},
+  bushu: {name:'部首',     kind:'bushu', basic:BUSHU_BASIC, exam:BUSHU_EXAM,
+          hint:'部首の名前は？', hintBack:'この部首の漢字は？',
+          dirLabels:['部首名を当てる','漢字を当てる']}
 };
 
-const VERSION = '2026-09-07-3';
+const VERSION = '2026-09-07-8';
 async function checkUpdate(){
   try{
     const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
@@ -1333,9 +1477,15 @@ function restoreSession(s){
   }
 }
 function syncDirPills(){
+  const d = DECKS[deckId];
+  const labels = d.dirLabels || ['穴うめ','意味当て'];
+  $('dir-fill').textContent = labels[0];
+  $('dir-meaning').textContent = labels[1];
   $('dir-fill').setAttribute('aria-pressed', dir==='fill');
   $('dir-meaning').setAttribute('aria-pressed', dir==='meaning');
-  $('hint').textContent = dir==='meaning' ? 'タップして　意味を見る' : DECKS[deckId].hint;
+  $('hint').textContent = dir==='meaning'
+    ? (d.hintBack || 'タップして　意味を見る')
+    : d.hint;
 }
 function setDir(name){
   dir = name; history = [];
@@ -1374,18 +1524,31 @@ function buildQueue(){
   done = 0;
 }
 function renderCard(item, idx){
+  const card0 = $('card');
+  card0.classList.add('swap');       // 切り替え中はフェードさせない
+  card0.classList.remove('reveal');  // 先に伏せてから中身を入れかえる
   current = item; shownIdx = idx;
   $('count').textContent = done + ' / ' + (done + queue.length);
   const kind = DECKS[deckId].kind;
   $('masu').hidden = (kind !== 'masu');
-  $('phrase').hidden = (kind !== 'blank');
-  if(kind === 'masu') renderMasu(item, idx); else renderPhrase(item);
-  $('yomi').textContent = kind==='masu' ? item[1] : (item[3] || '');
-  $('imi').textContent  = item[2];
+  $('phrase').hidden = (kind === 'masu');
+  if(kind === 'masu'){
+    renderMasu(item, idx);
+    $('yomi').textContent = item[1];
+    $('imi').textContent  = item[2];
+  }else if(kind === 'bushu'){
+    renderBushu(item);
+  }else{
+    renderPhrase(item);
+    $('yomi').textContent = item[3] || '';
+    $('imi').textContent  = item[2];
+  }
   const card = $('card');
   card.dataset.dir = dir;
-  card.classList.remove('reveal');
+  card.dataset.kind = kind;
   revealed = false;
+  void card.offsetWidth;             // ここまでの変更を確定させてから
+  requestAnimationFrame(() => card.classList.remove('swap'));
 }
 function renderMasu(item, idx){
   const masu = $('masu'); masu.innerHTML = '';
@@ -1395,6 +1558,29 @@ function renderMasu(item, idx){
     else { box.className='box hidden'; sp.textContent=ch; sp.style.visibility='hidden'; }
     box.appendChild(sp); masu.appendChild(box);
   });
+}
+function renderBushu(item){
+  const el = $('phrase'); el.innerHTML = '';
+  const glyph = item[5] || '';
+  const imi = $('imi');
+  imi.innerHTML = '';
+  if(dir === 'meaning'){
+    // 部首を見せて、その部首の漢字を当てる
+    const s = document.createElement('span'); s.className = 'ch';
+    s.textContent = item[2];
+    el.style.fontSize = item[2].length <= 6 ? '30px' : '24px';
+    el.appendChild(s);
+    if(glyph){ const g = document.createElement('span'); g.className='glyph-inline'; g.textContent = glyph; el.prepend(g); }
+    imi.textContent = item[1];
+  }else{
+    // 漢字を見せて、部首の名前を当てる
+    const s = document.createElement('span'); s.className = 'ch'; s.textContent = item[1];
+    el.style.fontSize = item[1].length <= 6 ? '30px' : item[1].length <= 10 ? '25px' : '21px';
+    el.appendChild(s);
+    if(glyph){ const g = document.createElement('span'); g.className='glyph'; g.textContent = glyph; imi.appendChild(g); }
+    imi.appendChild(document.createTextNode(item[2] + (item[4] ? '　' + item[4] : '')));
+  }
+  $('yomi').textContent = item[3];
 }
 function renderPhrase(item){
   const el = $('phrase'); el.innerHTML = '';
@@ -1501,6 +1687,7 @@ $('md-weak').addEventListener('click', ()=>setMode('weak'));
 $('deck-yoji').addEventListener('click', ()=>openDeck('yoji'));
 $('deck-kanyo').addEventListener('click', ()=>openDeck('kanyo'));
 $('deck-koto').addEventListener('click', ()=>openDeck('koto'));
+$('deck-bushu').addEventListener('click', ()=>openDeck('bushu'));
 
 load();
 renderHome();
