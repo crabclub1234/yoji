@@ -28,7 +28,9 @@
   }
   header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 8px}
   .brand{font-family:var(--mincho);font-size:15px;letter-spacing:.28em;color:var(--kin)}
-  .count{font-size:13px;font-variant-numeric:tabular-nums;color:#9fb2d0;letter-spacing:.06em}
+  .count .done-ok{color:#8fd6a8}
+  .count .left{color:#7d92b4}
+  .count{font-size:12.5px;font-variant-numeric:tabular-nums;color:#9fb2d0;letter-spacing:.06em}
   .back{background:none;border:0;color:#a9bcd8;font:inherit;font-size:14px;cursor:pointer;padding:4px 6px 4px 0}
 
   .screen{flex:1;display:flex;flex-direction:column}
@@ -1804,7 +1806,7 @@ const DECKS = {
           hint:'正しい敬語は？', noDir:true}
 };
 
-const VERSION = '2026-09-07-27';
+const VERSION = '2026-09-10-2';
 async function checkUpdate(){
   try{
     const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
@@ -1850,9 +1852,9 @@ function daily(){                                    // その日の消化数（
 }
 const restRev = () => Math.max(0, DUE_CAP - daily().rev);
 const restNew = () => Math.max(0, NEW_CAP - daily().nw);
-const DUE_CAP = 40;   // 1日にやる復習の上限（全ジャンル合計）
-const NEW_CAP = 20;   // 1日に進める新しい語の上限
-const SPAN = [1, 3, 7, 14, 30];                      // 忘却曲線に合わせた復習の間隔（日）
+const DUE_CAP = 50;      // 1回にやる復習の上限（全ジャンル合計）
+const NEW_CAP = 24;      // 1回に進める新しい語の上限
+const SPAN = [3, 21];    // 復習は2回：3日後と21日後                      // 忘却曲線に合わせた復習の間隔（日）
 const today = () => {
   const n = new Date();
   return Math.floor(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 86400000);
@@ -1924,10 +1926,20 @@ function renderHome(){
       btn.appendChild(c);
     }
   }
+  const dy = daily();
+  const hc = $('home-count'); hc.innerHTML = '';
+  const part = (label, done, cap) => {
+    const s = document.createElement('span');
+    if(done >= cap) s.className = 'done-ok';
+    s.textContent = label + ' ' + done + '/' + cap + '　';
+    return s;
+  };
+  hc.append(part('復習', dy.rev, DUE_CAP), part('新語', dy.nw, NEW_CAP));
+  const left = document.createElement('span');
+  left.className = 'left';
   const rv = Math.min(totalDue, restRev());
-  $('home-count').textContent = (rv || restNew())
-    ? '今日のぶん　復習 ' + rv + '　新しい語 ' + restNew()
-    : '今日のぶんは終わり';
+  left.textContent = (rv || restNew()) ? 'のこり ' + (rv + restNew()) : '達成';
+  hc.appendChild(left);
 }
 function saveSession(){
   if(!current) return;
@@ -2022,13 +2034,14 @@ function buildQueue(){
     due = due.concat(due.filter(e => isWeak(deckId, e[0])));      // 「まだ」の語は2回
     const fresh = shuffle(pool.filter(e => !(store[deckId] && store[deckId][e[0]]))).slice(0, restNew());
     if(!due.length && !fresh.length){
-      const seen = pool.filter(e => store[deckId] && store[deckId][e[0]]);
-      queue = shuffle(seen.length ? seen : pool.slice());   // おさらいでは新しい語を出さない
+      // 今日のぶんは終わり。ここからは、期限ぎれの残り → 未習 → おさらい の順で出す
+      const extraDue = pool.filter(e => needsReview(deckId, e[0]));
+      const unseen   = pool.filter(e => !(store[deckId] && store[deckId][e[0]]));
+      const seen     = pool.filter(e => store[deckId] && store[deckId][e[0]] && !needsReview(deckId, e[0]));
+      queue = shuffle(seen).concat(shuffle(unseen)).concat(shuffle(extraDue));
+      if(!queue.length) queue = shuffle(pool.slice());
       done = 0; dueLeft = 0; noticed = true;
-      $('note').textContent = (restRev() === 0 || restNew() === 0)
-        ? (seen.length ? '今日のぶんは終わりました。ここからはおさらいです。'
-                       : '今日のぶんは終わりました。ここから先はおまけです。')
-        : '今日の復習は終わりました。おさらいで全部出します。';
+      $('note').textContent = '今日のぶんは終わりました。ここからはおまけです。';
       return;
     }
     // 取り出しは末尾からなので、復習を後ろに置いて先に出す
@@ -2234,8 +2247,10 @@ function renderNote(){
   if(!storable){ note.textContent='この画面では記録を保存できません。ダウンロードしてブラウザで開いてください。'; return; }
   const n = pool.filter(e => isWeak(deckId, e[0])).length;
   const dueN = pool.filter(e => needsReview(deckId, e[0])).length;
+  const dy = daily();
   const txt = document.createElement('span');
-  txt.textContent = 'まだ ' + n + '語　今日の復習 ' + dueN + '語　';
+  txt.textContent = '今日 復習 ' + dy.rev + '/' + DUE_CAP + '・新語 ' + dy.nw + '/' + NEW_CAP
+                  + '　まだ ' + n + '語　';
   const btn = document.createElement('button');
   btn.className='reset'; btn.textContent='このジャンルの記録をけす';
   btn.onclick = () => {
