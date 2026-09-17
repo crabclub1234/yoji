@@ -52,6 +52,15 @@
   .lv-line .st-new{color:#7d92b4}
   .lv-line .st-due{color:#8fd6a8}
   .deck-cont{margin-top:8px;font-size:12px;color:var(--kin)}
+  .bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.09);margin:10px 0 0}
+  .bar .seg-solid{background:#8fd6a8}
+  .bar .seg-ok{background:rgba(143,214,168,.45)}
+  .bar .seg-ng{background:#c4402c}
+  .total{padding:0 16px 14px}
+  .total-line{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--paper)}
+  .total .total-sub{font-size:11.5px;color:#7d92b4}
+  .deck-name{position:relative}
+  .deck-pct{float:right;font-family:var(--gothic);font-size:15px;color:#8fd6a8;letter-spacing:0}
   .lead{padding:0 16px;font-size:13px;color:#8299bb;text-align:center;margin:0 0 6px}
 
   /* ---- 出題 ---- */
@@ -166,6 +175,7 @@
 <section class="screen" id="home">
   <header><div class="brand">ことばマス</div><div class="count" id="home-count"></div></header>
   <main>
+    <div class="total" id="total"></div>
     <p class="lead">やるジャンルをえらんでね</p>
     <button class="deck" id="deck-yoji"></button>
     <button class="deck" id="deck-kanyo"></button>
@@ -1806,7 +1816,7 @@ const DECKS = {
           hint:'正しい敬語は？', noDir:true}
 };
 
-const VERSION = '2026-09-10-3';
+const VERSION = '2026-09-10-4';
 async function checkUpdate(){
   try{
     const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
@@ -1878,14 +1888,14 @@ const needsReview = (id,w) => {                      // 今日が復習日の語
 };
 function stats(id, list){
   const r = store[id] || {};
-  let ne=0, ok=0, ng=0, due=0;
+  let ne=0, ok=0, ng=0, due=0, solid=0;
   list.forEach(e => {
     const x = r[e[0]];
     if(!x){ ne++; return; }
-    if(isDone(x)) ok++; else ng++;
+    if(isDone(x)){ ok++; if(x.b >= SPAN.length) solid++; } else ng++;
     if(isDue(x)) due++;
   });
-  return {ne, ok, ng, due};
+  return {ne, ok, ng, due, solid};
 }
 
 function shuffle(a){
@@ -1895,8 +1905,18 @@ function shuffle(a){
 const allOf = d => d.basic.concat(d.exam);
 
 /* ---- トップ ---- */
+function progressBar(s, total){
+  const bar = document.createElement('div'); bar.className = 'bar';
+  [['seg-solid', s.solid], ['seg-ok', s.ok - s.solid], ['seg-ng', s.ng]].forEach(([cls, n])=>{
+    if(n <= 0) return;
+    const seg = document.createElement('div');
+    seg.className = cls; seg.style.width = (n / total * 100) + '%';
+    bar.appendChild(seg);
+  });
+  return bar;
+}
 function renderHome(){
-  let totalNew = 0, totalNg = 0, totalDue = 0;
+  let totalNew = 0, totalNg = 0, totalDue = 0, totalAll = 0, totalOk = 0, totalSolid = 0;
   for(const id in DECKS){
     const d = DECKS[id];
     const btn = $('deck-' + id);
@@ -1917,7 +1937,13 @@ function renderHome(){
       if(s.due){ const f = document.createElement('span'); f.className='st-due'; f.textContent = '復習 ' + s.due; line.appendChild(f); }
       wrap.appendChild(line);
     });
-    btn.append(n, wrap);
+    const all = d.basic.length + d.exam.length;
+    const ds = stats(id, d.basic.concat(d.exam));
+    totalAll += all; totalOk += ds.ok; totalSolid += ds.solid;
+    const pct = document.createElement('span'); pct.className = 'deck-pct';
+    pct.textContent = Math.round(ds.ok / all * 100) + '%';
+    n.appendChild(pct);
+    btn.append(n, progressBar(ds, all), wrap);
     const ses = (store.sessions || {})[id];
     if(ses && ses.cur && !(ses.level !== 'basic' && !d.exam.length)){
       const lv = ses.level==='exam' ? lb[1] : ses.level==='all' ? lb[2] : lb[0];
@@ -1935,6 +1961,15 @@ function renderHome(){
     return s;
   };
   hc.append(part('復習', dy.rev, DUE_CAP), part('新語', dy.nw, NEW_CAP));
+  const tot = $('total');
+  tot.innerHTML = '';
+  const tline = document.createElement('div'); tline.className = 'total-line';
+  const tl = document.createElement('span');
+  tl.textContent = '全体 ' + Math.round(totalOk / totalAll * 100) + '%';
+  const tr = document.createElement('span'); tr.className = 'total-sub';
+  tr.textContent = 'できた ' + totalOk + ' / ' + totalAll + '　うちしっかり ' + totalSolid;
+  tline.append(tl, tr);
+  tot.append(tline, progressBar({solid: totalSolid, ok: totalOk, ng: totalNg}, totalAll));
   const left = document.createElement('span');
   left.className = 'left';
   const rv = Math.min(totalDue, restRev());
