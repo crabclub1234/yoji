@@ -1918,7 +1918,7 @@ const DECKS = {
           hint:'正しい敬語は？', noDir:true}
 };
 
-const VERSION = '2026-10-01-5';
+const VERSION = '2026-10-03-1';
 async function checkUpdate(){
   try{
     const res = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
@@ -1965,8 +1965,8 @@ function daily(){                                    // その日の消化数（
 }
 const restRev = () => Math.max(0, DUE_CAP - daily().rev);
 const restNew = () => Math.max(0, NEW_CAP - daily().nw);
-const DUE_CAP = 40;      // 1回にやる復習の上限（全ジャンル合計）
-const NEW_CAP = 20;      // 1回に進める新しい語の上限
+const DUE_CAP = 47;      // 1回にやる復習の上限（全ジャンル合計）
+const NEW_CAP = 23;      // 1回に進める新しい語の上限
 const SPAN = [3, 21];    // 復習は2回：3日後と21日後                      // 忘却曲線に合わせた復習の間隔（日）
 const today = () => {
   const n = new Date();
